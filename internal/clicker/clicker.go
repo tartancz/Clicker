@@ -34,20 +34,21 @@ func (c *Clicker) Run() {
 }
 
 func (c *Clicker) RunWithDelay(delay time.Duration) {
-	if c.stop != nil {
-		return
-	}
+	//Stop any running previos running clicker
+	c.Stop()
 	ctx, done := context.WithCancel(context.Background())
 	c.stop = done
 	go func() {
 		defer func() {
 			c.stop = nil
 		}()
+		//block clicking certain times
 		select {
 		case <-time.After(delay):
 		case <-ctx.Done():
 			return
 		}
+		//running clicker
 		for {
 			select {
 			case <-ctx.Done():
@@ -60,7 +61,9 @@ func (c *Clicker) RunWithDelay(delay time.Duration) {
 }
 
 func (c *Clicker) Stop() {
-	c.stop()
+	if c.stop != nil {
+		c.stop()
+	}
 }
 
 func (c *Clicker) click() {

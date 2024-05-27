@@ -29,7 +29,7 @@ func (app *application) onReady() {
 	systray.SetTitle("Awesome App")
 	systray.SetIcon(icon.Data)
 
-	app.status = systray.AddMenuItem("Status: idle", "")
+	app.status = systray.AddMenuItem("Status: Idle", "")
 
 	systray.AddSeparator()
 
@@ -44,11 +44,11 @@ func (app *application) onReady() {
 	for {
 		select {
 		case <-app.antiAfk30Min.ClickedCh:
-			app.clicker.RunWithDelay(30 * time.Minute)
+			app.antiAfk30MinClicked()
 		case <-app.antiAfk.ClickedCh:
-			app.clicker.Run()
+			app.antiAfkClicked()
 		case <-app.stop.ClickedCh:
-			app.clicker.Stop()
+			app.stopClicked()
 		case <-app.quit.ClickedCh:
 			app.quitClicked()
 			return
