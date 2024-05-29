@@ -3,7 +3,6 @@ package main
 import (
 	"click/internal/clicker"
 	"click/ui"
-	"fmt"
 	"time"
 
 	"github.com/getlantern/systray"
@@ -20,7 +19,6 @@ type application struct {
 }
 
 func main() {
-	fmt.Println()
 	app := application{clicker: clicker.NewClicker()}
 	app.clicker.Interval = time.Second * 3
 	app.clicker.Kb.AddKey(keybd_event.VK_0)
