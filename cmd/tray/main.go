@@ -2,61 +2,34 @@ package main
 
 import (
 	"click/internal/clicker"
-	"click/ui"
 	"time"
 
-	"github.com/getlantern/systray"
-	"github.com/micmonay/keybd_event"
+	"fyne.io/fyne/v2"
+	fyneApp "fyne.io/fyne/v2/app"
 )
 
 type application struct {
-	status       *systray.MenuItem
-	antiAfk30Min *systray.MenuItem
-	antiAfk      *systray.MenuItem
-	stop         *systray.MenuItem
-	quit         *systray.MenuItem
-	clicker      *clicker.Clicker
+	clicker  *clicker.Clicker
+	tray     *tray
+	fyneApp  fyne.App
+	schelGui *scheluderGui
 }
 
 func main() {
-	app := application{clicker: clicker.NewClicker()}
+	app := NewApplication()
 	app.clicker.Interval = time.Second * 3
-	app.clicker.Kb.AddKey(keybd_event.VK_0)
-	systray.Run(app.onReady, app.onExit)
+	app.clicker.Kb.HasSHIFT(true)
+	app.fyneApp.Run()
 }
 
-func (app *application) onReady() {
-	systray.SetTitle("Awesome App")
-	systray.SetIcon(ui.InactiveIcon)
-
-	app.status = systray.AddMenuItem("Status: Idle", "")
-
-	systray.AddSeparator()
-
-	app.antiAfk30Min = systray.AddMenuItemCheckbox("Run after 30 min", "Start program after 30 min after activation", false)
-	app.antiAfk = systray.AddMenuItemCheckbox("Run", "Start program", false)
-	app.stop = systray.AddMenuItem("stop", "")
-	app.stop.Disable()
-
-	systray.AddSeparator()
-
-	app.quit = systray.AddMenuItem("Quit", "Quit the whole app")
-
-	for {
-		select {
-		case <-app.antiAfk30Min.ClickedCh:
-			app.antiAfk30MinClicked()
-		case <-app.antiAfk.ClickedCh:
-			app.antiAfkClicked()
-		case <-app.stop.ClickedCh:
-			app.stopClicked()
-		case <-app.quit.ClickedCh:
-			app.quitClicked()
-			return
-		}
+func NewApplication() *application {
+	app := application{
+		clicker: clicker.NewClicker(),
+		fyneApp: fyneApp.New(),
 	}
-}
 
-func (app *application) onExit() {
+	app.tray = NewTray(&app)
+	app.schelGui = NewScheluderGui(&app)
 
+	return &app
 }

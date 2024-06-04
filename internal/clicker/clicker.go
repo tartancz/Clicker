@@ -8,6 +8,9 @@ import (
 	"github.com/micmonay/keybd_event"
 )
 
+const (
+	maxTime = time.Duration(1<<63 - 1)
+)
 type Clicker struct {
 	Interval time.Duration
 	Kb       *keybd_event.KeyBonding
@@ -29,12 +32,7 @@ func NewClicker() *Clicker {
 	return &clicker
 }
 
-func (c *Clicker) Run() {
-	c.RunWithDelay(0)
-}
-
-func (c *Clicker) RunWithDelay(delay time.Duration) {
-	//Stop any running previos running clicker
+func (c *Clicker) RunScheluded(StartAfter, RunFor time.Duration) {
 	c.Stop()
 	ctx, done := context.WithCancel(context.Background())
 	c.stop = done
@@ -44,20 +42,31 @@ func (c *Clicker) RunWithDelay(delay time.Duration) {
 		}()
 		//block clicking certain times
 		select {
-		case <-time.After(delay):
+		case <-time.After(StartAfter):
 		case <-ctx.Done():
 			return
 		}
 		//running clicker
+		timer := time.NewTimer(RunFor)
+		defer func() {
+			timer.Stop()
+		}()
 		for {
 			select {
 			case <-ctx.Done():
 				return
+			case <-timer.C:
+				return
 			default:
 				c.click()
+				time.Sleep(c.Interval)
 			}
 		}
 	}()
+}
+
+func (c *Clicker) Run() {
+	c.RunScheluded(0, maxTime)
 }
 
 func (c *Clicker) Stop() {
@@ -72,5 +81,5 @@ func (c *Clicker) click() {
 	if err != nil {
 		panic(err)
 	}
-	time.Sleep(c.Interval)
+
 }
