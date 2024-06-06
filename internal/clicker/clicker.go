@@ -2,6 +2,7 @@ package clicker
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"time"
 
@@ -9,8 +10,9 @@ import (
 )
 
 const (
-	maxTime = time.Duration(1<<63 - 1)
+	MaxTime = time.Duration(1<<63 - 1)
 )
+
 type Clicker struct {
 	Interval time.Duration
 	Kb       *keybd_event.KeyBonding
@@ -33,6 +35,10 @@ func NewClicker() *Clicker {
 }
 
 func (c *Clicker) RunScheluded(StartAfter, RunFor time.Duration) {
+	c.RunScheludedFunc(StartAfter, RunFor, nil)
+}
+
+func (c *Clicker) RunScheludedFunc(StartAfter, RunFor time.Duration, AfterScheludeIsDone func()) {
 	c.Stop()
 	ctx, done := context.WithCancel(context.Background())
 	c.stop = done
@@ -56,6 +62,9 @@ func (c *Clicker) RunScheluded(StartAfter, RunFor time.Duration) {
 			case <-ctx.Done():
 				return
 			case <-timer.C:
+				if AfterScheludeIsDone != nil {
+					AfterScheludeIsDone()
+				}
 				return
 			default:
 				c.click()
@@ -66,7 +75,7 @@ func (c *Clicker) RunScheluded(StartAfter, RunFor time.Duration) {
 }
 
 func (c *Clicker) Run() {
-	c.RunScheluded(0, maxTime)
+	c.RunScheluded(0, MaxTime)
 }
 
 func (c *Clicker) Stop() {
@@ -76,10 +85,8 @@ func (c *Clicker) Stop() {
 }
 
 func (c *Clicker) click() {
-
 	err := c.Kb.Launching()
 	if err != nil {
 		panic(err)
 	}
-
 }

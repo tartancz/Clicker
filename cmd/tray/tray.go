@@ -91,6 +91,7 @@ func (t *tray) SetState(state TrayState, status string) {
 	case StateScheludedStart:
 		t.SetIcon(IconInactive)
 		t.ScheludedStart.Checked = true
+		t.ScheludedStart.Disabled = true
 
 		t.Start.Disabled = true
 		t.Stop.Disabled = false
@@ -125,7 +126,21 @@ func (app *application) configurationHandler() {
 
 func (app *application) scheludedStartHandler() {
 	app.tray.SetState(StateScheludedStart, "Running")
-	app.schelGui.Show()
+	sche := NewScheluderGui(app)
+	sche.Show()
+	for {
+		select {
+		case schelude := <-sche.ChSchelude:
+			app.clicker.RunScheludedFunc(
+				schelude.runAfter,
+				schelude.runFor,
+				func() { app.tray.SetState(StateStop, "Idle")},
+			)
+		case <-sche.ChCancel:
+			app.tray.SetState(StateStop, "Idle")
+		}
+	
+	}
 }
 
 func (app *application) startHandler() {

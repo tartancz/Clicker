@@ -2,6 +2,7 @@ package main
 
 import (
 	"click/internal/clicker"
+	"os"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -9,13 +10,13 @@ import (
 )
 
 type application struct {
-	clicker  *clicker.Clicker
-	tray     *tray
-	fyneApp  fyne.App
-	schelGui *scheluderGui
+	clicker *clicker.Clicker
+	tray    *tray
+	fyneApp fyne.App
 }
 
 func main() {
+	os.Setenv("FYNE_THEME", "dark")
 	app := NewApplication()
 	app.clicker.Interval = time.Second * 3
 	app.clicker.Kb.HasSHIFT(true)
@@ -29,7 +30,6 @@ func NewApplication() *application {
 	}
 
 	app.tray = NewTray(&app)
-	app.schelGui = NewScheluderGui(&app)
 
 	return &app
 }

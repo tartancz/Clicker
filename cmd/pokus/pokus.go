@@ -1,11 +1,10 @@
 package main
 
-import (
-	"fmt"
-	"runtime"
-)
-
 func main() {
-	fmt.Println(runtime.GOOS)
+	call(nil)
 
+}
+
+func call(asd func()) {
+	asd()
 }

@@ -1,6 +1,10 @@
 package main
 
 import (
+	"click/internal/clicker"
+	"click/ui"
+	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -55,7 +59,7 @@ func NewScheluderGui(app *application) *scheluderGui {
 		ChSchelude:      make(chan schelude),
 		ChCancel:        make(chan struct{}),
 	}
-
+	sche.mainWindow.SetCloseIntercept(sche.Close)
 	form := &widget.Form{
 		Items: []*widget.FormItem{
 			{Text: "Type", Widget: sche.TypeSelect},
@@ -68,16 +72,20 @@ func NewScheluderGui(app *application) *scheluderGui {
 			{Text: "Stop In", Widget: sche.StopInEntry},
 		},
 		OnSubmit: func() {
-			sche.mainWindow.Hide()
+			schelude := sche.GetSchelude()
+			sche.ChSchelude <- schelude
+			sche.mainWindow.Close()
 		},
 	}
 	sche.registerChanges()
+	sche.RegisterValidation()
 	sche.mainWindow.SetContent(form)
-	sche.TypeSelect.SetSelected("With delay")
+
 	return &sche
 }
 
 func (s *scheluderGui) Show() {
+	s.TypeSelect.SetSelected("With delay")
 	s.RunAfterEntry.SetText("0")
 	s.AfterTypeSelect.SetSelected("seconds")
 	s.RunForEntry.SetText("0")
@@ -85,19 +93,30 @@ func (s *scheluderGui) Show() {
 	nowFormatted := FormatTime(time.Now())
 	s.RunInEntry.SetText(nowFormatted)
 	s.Opened = true
-	// go func() {
-	// 	for s.Opened {
-	// 		s.UpdateTimes()
-	// 		time.Sleep(1 * time.Second)
-	// 	}
-	// }()
-
+	go func() {
+		for s.Opened {
+			s.UpdateTimes()
+			time.Sleep(1 * time.Second)
+		}
+	}()
+	
+	ico := fyne.NewStaticResource("schelude.ico", []byte(ui.ScheludeIcon))
+	s.mainWindow.SetIcon(ico)
 	s.mainWindow.Show()
 }
 
 func (s *scheluderGui) Close() {
 	s.Opened = false
 	s.mainWindow.Close()
+	s.ChCancel <- struct{}{}
+}
+
+func (s *scheluderGui) RegisterValidation() {
+	s.RunAfterEntry.Validator = s.RunAfterAndForEntryValidation
+	s.RunForEntry.Validator = s.RunAfterAndForEntryValidation
+
+	s.RunInEntry.Validator = s.RunInValidation
+	s.StopInEntry.Validator = s.StopInValidation
 }
 
 func (s *scheluderGui) registerChanges() {
@@ -110,11 +129,11 @@ func (s *scheluderGui) registerChanges() {
 	s.ForTypeSelect.OnChanged = func(_ string) { s.OnChangeRunFor(s.RunForEntry.Text) }
 
 	s.RunInEntry.OnChanged = s.OnChangeRunIn
-	s.StopInEntry.OnChanged = nil
+	s.StopInEntry.OnChanged = s.OnChangeStopIn
 }
 
 func (s *scheluderGui) OnChangeRunAfter(val string) {
-	if s.TypeSelect.Selected == "With time" {
+	if s.TypeSelect.Selected != "With delay" {
 		return
 	}
 	value, err := strconv.Atoi(val)
@@ -126,7 +145,7 @@ func (s *scheluderGui) OnChangeRunAfter(val string) {
 }
 
 func (s *scheluderGui) OnChangeRunFor(val string) {
-	if s.TypeSelect.Selected == "With time" {
+	if s.TypeSelect.Selected != "With delay" {
 		return
 	}
 	value, err := strconv.Atoi(val)
@@ -137,24 +156,25 @@ func (s *scheluderGui) OnChangeRunFor(val string) {
 		s.StopInEntry.SetText("")
 		return
 	}
-	dur := parseDuration(value, s.ForTypeSelect.Selected) + parseDuration(value, s.AfterTypeSelect.Selected)
+	value2, err := strconv.Atoi(s.RunAfterEntry.Text)
+	if err != nil {
+		value2 = 0
+	}
+	dur := parseDuration(value2, s.ForTypeSelect.Selected) + parseDuration(value, s.AfterTypeSelect.Selected)
 	s.StopInEntry.SetText(FormatTime(time.Now().Add(dur)))
 }
 
 func (s *scheluderGui) OnChangeRunIn(val string) {
 	//only if with time is selected
-	if s.TypeSelect.Selected == "With delay" {
+	if s.TypeSelect.Selected != "With time" {
 		return
 	}
-	//user input is not valid
-	t, err := time.ParseInLocation(time.TimeOnly, val, time.Local)
+
+	t, err := NewDateWithTimeFromString(val)
 	if err != nil {
 		s.RunAfterEntry.SetText("0")
 		return
 	}
-	//add date to time
-	today := time.Now()
-	t = t.AddDate(today.Year(), int(today.Month())-1, today.Day()-1)
 
 	//calculate duration
 	dur, timeType := FormatDuration(time.Until(t))
@@ -165,7 +185,26 @@ func (s *scheluderGui) OnChangeRunIn(val string) {
 }
 
 func (s *scheluderGui) OnChangeStopIn(val string) {
-	//TODO: implement
+	if s.TypeSelect.Selected != "With time" {
+		return
+	}
+	t, err := NewDateWithTimeFromString(val)
+	if err != nil {
+		s.RunForEntry.SetText("0")
+		return
+	}
+
+	t2, err := NewDateWithTimeFromString(s.RunInEntry.Text)
+	if err != nil {
+		t2 = time.Now()
+	}
+	fmt.Println(t, t2)
+	//calculate duration
+	dur, timeType := FormatDuration(t.Sub(t2))
+
+	//set values
+	s.RunForEntry.SetText(strconv.Itoa(dur))
+	s.ForTypeSelect.SetSelected(timeType)
 }
 
 func (s *scheluderGui) WithTypeOnChange(value string) {
@@ -188,12 +227,107 @@ func (s *scheluderGui) WithTypeOnChange(value string) {
 		s.RunForEntry.Enable()
 	}
 }
+
 func (s *scheluderGui) UpdateTimes() {
 	switch s.TypeSelect.Selected {
 	case "With time":
 		s.OnChangeRunIn(s.RunInEntry.Text)
+		s.OnChangeStopIn(s.StopInEntry.Text)
 	case "With delay":
 		s.OnChangeRunAfter(s.RunAfterEntry.Text)
 		s.OnChangeRunFor(s.RunForEntry.Text)
 	}
+}
+
+func (s *scheluderGui) RunAfterAndForEntryValidation(value string) error {
+	if s.TypeSelect.Selected != "With delay" {
+		return nil
+	}
+	if value == "" {
+		return nil
+	}
+	val, err := strconv.Atoi(value)
+	if err != nil {
+		return errors.New("Not a number")
+	}
+	if val < 0 {
+		return errors.New("Negative number")
+	}
+	return nil
+}
+
+func (s *scheluderGui) RunInValidation(val string) error {
+	if s.TypeSelect.Selected != "With time" {
+		return nil
+	}
+	if s.RunInEntry.Text == "" {
+		return nil
+	}
+	t, err := NewDateWithTimeFromString(val)
+	if err != nil {
+		return errors.New("Invalid time format")
+	}
+	if time.Now().After(t) {
+		return errors.New("Time is in the past")
+	}
+	return nil
+}
+
+func (s *scheluderGui) StopInValidation(val string) error {
+	if s.TypeSelect.Selected != "With time" {
+		return nil
+	}
+	if s.StopInEntry.Text == "" {
+		return nil
+	}
+	t, err := NewDateWithTimeFromString(val)
+	if err != nil {
+		return errors.New("Invalid time format")
+	}
+	t2, err := NewDateWithTimeFromString(s.RunInEntry.Text)
+	if err != nil {
+		t2 = time.Now()
+	}
+	if t.After(t2) {
+		return errors.New("Time is in the past")
+	}
+	return nil
+}
+
+func (s *scheluderGui) GetSchelude() schelude {
+	var sch schelude
+	if s.RunAfterEntry.Text == "" {
+		sch.runAfter = 0
+	} else {
+		AfterValue, err := strconv.Atoi(s.RunAfterEntry.Text)
+		if err != nil {
+			panic(err)
+		}
+		switch s.AfterTypeSelect.Selected {
+		case "seconds":
+			sch.runAfter = time.Duration(AfterValue) * time.Second
+		case "minutes":
+			sch.runAfter = time.Duration(AfterValue) * time.Minute
+		case "hours":
+			sch.runAfter = time.Duration(AfterValue) * time.Hour
+		}
+	}
+
+	if s.RunForEntry.Text == "" || s.RunForEntry.Text == "0" {
+		sch.runFor = clicker.MaxTime
+	} else {
+		ForValue, err := strconv.Atoi(s.RunForEntry.Text)
+		if err != nil {
+			panic(err)
+		}
+		switch s.ForTypeSelect.Selected {
+		case "seconds":
+			sch.runFor = time.Duration(ForValue) * time.Second
+		case "minutes":
+			sch.runFor = time.Duration(ForValue) * time.Minute
+		case "hours":
+			sch.runFor = time.Duration(ForValue) * time.Hour
+		}
+	}
+	return sch
 }
