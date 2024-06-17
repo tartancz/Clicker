@@ -2,7 +2,6 @@ package clicker
 
 import (
 	"context"
-	"fmt"
 	"runtime"
 	"time"
 
